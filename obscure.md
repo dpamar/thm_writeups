@@ -1,5 +1,8 @@
 # THM - Obscure writeup
 
+Lien : https://github.com/dpamar/thm_writeups/blob/main/obscure.md
+
+## Etape 1 : discovery
 On commence dans un premier temps par scanner la machine, avec Nmap
 ```
 ┌──(root㉿kali)-[~]
@@ -52,6 +55,7 @@ ftp> mget *
 
 La notice indique que le binaire sert à retrouver un password. Accessoirement, elle indique aussi le nom du domaine, antisoft.thm
 
+## Etape 2 : binaire password
 On va s'occuper du binaire. Il demande un employee ID
 ```
 Password Recovery
@@ -65,6 +69,8 @@ Password Recovery
 Please enter your employee id that is in your email
 remember this next time 'xxxxxxxxxxxxxx'
 ```
+
+## Etape 3 : ODOO CRM
 On va pouvoir se connecter sur le site web maintenant. On peut essayer le login "admin@antisoft.thm" et le password qu'on vient de trouver --> ça marche !
 C'est le CRM Odoo, en version 10. Une rapide recherche via searchsploit nous indique une RCE possible, avec la marche à suivre
 
@@ -104,6 +110,8 @@ sessions
 $ cat flag.txt
 THM{xxxxxxxxxxxxxxxxxxxxx}
 ```
+
+## Etape 4 : binaire /ret
 Etape suivante : on remarque que sudo n'est même pas installé 😢 On regarde les binaires avec suid
 ```
 $ find / -type f -perm -4000 -ls 2>/dev/null
@@ -120,7 +128,7 @@ $ find / -type f -perm -4000 -ls 2>/dev/null
 156970   56 -rwsr-xr-x   1 root     root        54192 May 17  2017 /usr/bin/passwd
  10150   12 -rwsr-xr-x   1 root     root         8864 Jul 23  2022 /ret
 ```
-On remarque le dernier, /ret, un binaire un peu étrange. On le récupère en local, on le passe sous ghidra : après avoir lu un buffer de 32 bytes (non contrôlés), on ne fait rien. Mais il y a une fonction "win" qui n'est jamais appelée - mais qui lance un shell.
+On remarque le dernier, /ret, un binaire un peu étrange. On le récupère en local, on le passe sous ghidra : après avoir lu un buffer de 128 bytes (non contrôlés), on ne fait rien. Mais il y a une fonction "win" qui n'est jamais appelée - mais qui lance un shell.
 On va pouvoir faire un exploit, en local, qui lance win. Et il marche
 ```
 #!/usr/bin/python
@@ -150,6 +158,7 @@ Well done,my friend, you rooted a docker container.
 ```
 Damned.
 
+## Etape 5 : scan réseau (et /ret le retour)
 Pour voir ce qu'on peut trouver d'autre, on va lancer linpeas. On remarque deux choses intéressantes
 1. nmap est installé sur le serveur
 2. il existe d'autres entrées dans /etc/hosts qui sont intéressantes.
@@ -172,6 +181,8 @@ cat user.txt
 THM{xxxxxxxxxxxxxxxxxxxxx}
 ```
 On a pu pivoter sur une autre machine, et avoir le flag suivant. C'est bien.
+
+## Etape 6 : binaire /exploit_me (local)
 Avant de continuer, pour éviter de rebondir de machine en machine, on va mettre notre clef ssh dans les authorized_keys de zeeshan.
 
 Zeeshan a les droits sudo sur tout... mais avec password - sauf sur un binaire assez explicite, /exploit_me en root - et de toutes les façons exploit_me appartient à root, avec suid, donc bon...
@@ -233,6 +244,8 @@ p.sendline(payload)
 
 p.interactive()
 ```
+
+## Etape 7 (dernière) : binaire /exploit_me (remote)
 
 En remote... on n'a pas forcément la même libc. Il va falloir se servir des addresses leakées pour obtenir la bonne version (via https://libc.rip/). Le code reste globalement le même, une fois lancé une fois on peut obtenir les addresses réelles de gets, de la chaine /bin/sh et de system
 ```
