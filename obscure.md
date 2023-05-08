@@ -1,6 +1,6 @@
 # THM - Obscure writeup
 
-Lien : https://github.com/dpamar/thm_writeups/blob/main/obscure.md
+Lien : https://tryhackme.com/room/obscured
 
 ## Etape 1 : discovery
 On commence dans un premier temps par scanner la machine, avec Nmap
